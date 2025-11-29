@@ -1,0 +1,10 @@
+python-telegram-bot==20.7
+selenium==4.16.0
+beautifulsoup4==4.12.2
+mysql-connector-python==8.2.0
+redis==5.0.1
+python-dotenv==1.0.0
+fake-useragent==1.4.0
+undetected-chromedriver==3.5.4
+requests==2.31.0
+setuptools>=65.5.0
