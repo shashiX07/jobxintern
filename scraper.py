@@ -13,16 +13,37 @@ logger = logging.getLogger(__name__)
 def get_driver():
     """Create undetected Chrome driver"""
     options = uc.ChromeOptions()
-    options.add_argument('--headless')
+    options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--window-size=1920,1080')
     options.add_argument(f'user-agent={UserAgent().random}')
     
+    # Try to find Chrome binary on Linux
+    import platform
+    if platform.system() == 'Linux':
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+            '/snap/bin/chromium'
+        ]
+        import os
+        for path in chrome_paths:
+            if os.path.exists(path):
+                options.binary_location = path
+                logger.info(f"Using Chrome binary at: {path}")
+                break
+    
     try:
-        driver = uc.Chrome(options=options, version_main=None)
+        driver = uc.Chrome(options=options, version_main=None, use_subprocess=True)
         return driver
     except Exception as e:
         logger.error(f"Error creating driver: {e}")
+        logger.info("Chrome/Chromium may not be installed. Install with: sudo apt install chromium-browser")
         return None
 
 def scrape_linkedin_jobs(job_type, work_mode, domain, max_jobs=10):
