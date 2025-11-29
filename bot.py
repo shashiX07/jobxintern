@@ -7,6 +7,7 @@ import database
 import keyboards
 from cache import cache
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +142,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"• Type: {state['job_type']}\n"
                     f"• Mode: {state['work_mode']}\n"
                     f"• Domains: {', '.join(domains)}\n\n"
-                    f"You'll receive job notifications twice daily at {', '.join(config.NOTIFICATION_TIMES)}.\n\n"
-                    f"Use the menu to view jobs anytime!",
+                    f"You'll receive job notifications <b>4 times daily</b> at {', '.join(config.NOTIFICATION_TIMES)}.\n\n"
+                    f"Jobs are updated every <b>6 hours</b>. Use the menu to view jobs anytime!",
                     reply_markup=None
                 )
                 
@@ -243,13 +244,23 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboards.get_job_type_keyboard()
         )
     
+    elif text == "📊 My Stats":
+        await show_user_stats(update, context)
+    
+    elif text == "💡 Share Bot":
+        await share_bot(update, context)
+    
+    elif text == "☕ Support Us":
+        await show_donation(update, context)
+    
     elif text == "ℹ️ Help":
         await update.message.reply_text(
             "🤖 Bot Help\n\n"
             "This bot helps you find jobs and internships based on your preferences.\n\n"
             "📌 Features:\n"
             "• Personalized job recommendations\n"
-            "• Notifications twice daily\n"
+            "• Notifications 4 times daily\n"
+            "• Jobs updated every 6 hours\n"
             "• Jobs from LinkedIn & Internshala\n"
             "• Easy preference management\n\n"
             "🔧 Commands:\n"
@@ -279,7 +290,8 @@ async def show_jobs_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if not jobs:
         message = (
             "🔍 No new jobs found matching your preferences right now.\n\n"
-            "Jobs are scraped every 12 hours. Check back later!"
+            "Jobs are updated every 6 hours. Check back later!\n\n"
+            "💡 Tip: Try sharing this bot with friends to help them find opportunities too!"
         )
         if is_callback:
             await update.callback_query.edit_message_text(message)
@@ -319,6 +331,118 @@ def format_job_message(job):
         f"📅 Posted: {job['posted_date']}\n"
         f"🔗 Source: {job['source']}\n\n"
         f"{job['description'][:200] if job['description'] else 'Click View Details to learn more!'}"
+    )
+
+async def show_user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show user's personal statistics"""
+    user_id = update.effective_user.id
+    
+    try:
+        connection = database.get_connection()
+        if not connection:
+            await update.message.reply_text("❌ Database error!")
+            return
+        
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get user info
+        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            await update.message.reply_text("Please complete setup first using /start")
+            cursor.close()
+            connection.close()
+            return
+        
+        # Get domains
+        cursor.execute("SELECT domain FROM user_domains WHERE user_id = %s", (user_id,))
+        domains = [d['domain'] for d in cursor.fetchall()]
+        
+        # Get notification count
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM sent_notifications WHERE user_id = %s",
+            (user_id,)
+        )
+        notif_count = cursor.fetchone()['count']
+        
+        cursor.close()
+        connection.close()
+        
+        days_active = (datetime.now() - user['created_at']).days
+        
+        stats_text = (
+            f"📊 <b>Your Statistics</b>\n\n"
+            f"👤 <b>Name:</b> {user['first_name']}\n"
+            f"🆔 <b>User ID:</b> {user_id}\n"
+            f"📅 <b>Member Since:</b> {user['created_at'].strftime('%d %b %Y')}\n"
+            f"⏰ <b>Active Days:</b> {days_active}\n\n"
+            f"🎯 <b>Your Preferences:</b>\n"
+            f"   • Type: {user['job_type']}\n"
+            f"   • Mode: {user['work_mode']}\n"
+            f"   • Domains: {', '.join(domains)}\n\n"
+            f"📬 <b>Notifications Received:</b> {notif_count}\n"
+            f"🔄 <b>Jobs Refresh:</b> Every 6 hours\n"
+            f"📨 <b>Notification Times:</b> {', '.join(config.NOTIFICATION_TIMES)}\n\n"
+            f"Keep checking for new opportunities! 🚀"
+        )
+        
+        await update.message.reply_text(
+            text=stats_text,
+            parse_mode='HTML',
+            reply_markup=keyboards.get_main_menu_keyboard()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing stats: {e}")
+        await update.message.reply_text("❌ Error loading statistics")
+
+async def share_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show share bot message"""
+    bot_username = context.bot.username
+    share_text = (
+        "📢 <b>Share This Bot</b>\n\n"
+        "Help your friends find job opportunities!\n\n"
+        f"🔗 <b>Bot Link:</b> https://t.me/{bot_username}\n\n"
+        "📱 <b>Share Message:</b>\n"
+        f"<code>Check out this amazing job bot! It sends personalized job notifications 4 times daily 🚀\n\n"
+        f"https://t.me/{bot_username}</code>\n\n"
+        "<i>Tap to copy and share on WhatsApp, Telegram, or anywhere!</i> 💚"
+    )
+    
+    await update.message.reply_text(
+        text=share_text,
+        parse_mode='HTML',
+        reply_markup=keyboards.get_main_menu_keyboard()
+    )
+
+async def show_donation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show donation information"""
+    donation_text = (
+        "☕ <b>Support Our Bot</b>\n\n"
+        f"{config.DONATION_MESSAGE}\n\n"
+    )
+    
+    if config.DONATION_UPI:
+        donation_text += (
+            f"💳 <b>UPI ID:</b> <code>{config.DONATION_UPI}</code>\n"
+            f"<i>(Tap to copy)</i>\n\n"
+        )
+    
+    donation_text += (
+        "🙏 <b>Your support helps us:</b>\n"
+        "  • Keep servers running 24/7\n"
+        "  • Add more job sources\n"
+        "  • Improve features & speed\n"
+        "  • Send faster notifications\n\n"
+        "Thank you for considering! ❤️\n\n"
+        "<i>Every contribution matters, no matter how small!</i>"
+    )
+    
+    await update.message.reply_text(
+        text=donation_text,
+        parse_mode='HTML',
+        reply_markup=keyboards.get_main_menu_keyboard()
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

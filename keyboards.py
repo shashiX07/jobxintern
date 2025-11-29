@@ -4,7 +4,9 @@ def get_main_menu_keyboard():
     """Main menu keyboard"""
     keyboard = [
         [KeyboardButton("🔍 View Jobs"), KeyboardButton("👤 My Account")],
-        [KeyboardButton("⚙️ Change Preferences"), KeyboardButton("ℹ️ Help")]
+        [KeyboardButton("📊 My Stats"), KeyboardButton("💡 Share Bot")],
+        [KeyboardButton("⚙️ Change Preferences"), KeyboardButton("☕ Support Us")],
+        [KeyboardButton("ℹ️ Help")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 

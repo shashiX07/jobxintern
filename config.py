@@ -34,8 +34,12 @@ REDIS_CONFIG = {
 }
 
 # Scraping Configuration
-SCRAPE_INTERVAL_HOURS = int(os.getenv('SCRAPE_INTERVAL_HOURS', 12))
-NOTIFICATION_TIMES = os.getenv('NOTIFICATION_TIMES', '09:00,18:00').split(',')
+SCRAPE_INTERVAL_HOURS = int(os.getenv('SCRAPE_INTERVAL_HOURS', 6))
+NOTIFICATION_TIMES = os.getenv('NOTIFICATION_TIMES', '08:00,12:00,16:00,20:00').split(',')
+
+# Donation Configuration
+DONATION_UPI = os.getenv('DONATION_UPI', '')  # Your UPI ID
+DONATION_MESSAGE = os.getenv('DONATION_MESSAGE', '☕ Support us! Your donations help keep this bot running.')
 
 # Job Types and Domains
 JOB_TYPES = ['Internship', 'Job']
