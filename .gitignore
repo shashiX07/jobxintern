@@ -29,3 +29,6 @@ chromedriver*
 .idea/
 *.swp
 *.swo
+
+test_config.py
+test_scraping.py

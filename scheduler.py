@@ -69,6 +69,7 @@ class JobScheduler:
         try:
             connection = database.get_connection()
             if not connection:
+                logger.error("Failed to connect to database for scraping")
                 return
             
             cursor = connection.cursor(dictionary=True)
@@ -86,6 +87,12 @@ class JobScheduler:
             cursor.close()
             connection.close()
             
+            if not combinations:
+                logger.info("No active users found. Scraping skipped. Add users via /start on Telegram.")
+                self.is_scraping = False
+                return
+            
+            logger.info(f"Found {len(combinations)} preference combinations to scrape")
             total_scraped = 0
             
             for combo in combinations:
