@@ -1,12 +1,21 @@
 import os
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Telegram Configuration
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 REQUIRED_CHANNELS = [int(ch) for ch in os.getenv('REQUIRED_CHANNELS', '').split(',') if ch.strip()]
+
+# Log configuration on startup
+logger.info(f"Config loaded - ADMIN_ID: {ADMIN_ID}, BOT_TOKEN: {'Set' if BOT_TOKEN else 'Missing'}")
+
+if ADMIN_ID == 0:
+    logger.warning("⚠️ ADMIN_ID is 0! Check your .env file!")
 
 # Database Configuration
 MYSQL_CONFIG = {

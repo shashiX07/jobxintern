@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 def is_admin(user_id: int) -> bool:
     """Check if user is admin"""
+    logger.info(f"Admin check: user_id={user_id}, ADMIN_ID={config.ADMIN_ID}, match={user_id == config.ADMIN_ID}")
     return user_id == config.ADMIN_ID
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
