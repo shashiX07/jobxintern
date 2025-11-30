@@ -46,20 +46,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # New user - check channel membership
-    is_member = await check_channel_membership(update, context)
+    # New user - MUST check channel membership first
+    if config.REQUIRED_CHANNELS:
+        is_member = await check_channel_membership(update, context)
+        
+        if not is_member:
+            await update.message.reply_text(
+                "🔒 <b>Welcome to Job Alert Bot!</b>\n\n"
+                "To use this bot, please join our required channel(s) first:\n\n"
+                "After joining, click the '✅ I've Joined' button below to verify and continue.",
+                parse_mode='HTML',
+                reply_markup=keyboards.get_channels_keyboard(config.REQUIRED_CHANNELS)
+            )
+            return
     
-    if not is_member and config.REQUIRED_CHANNELS:
-        await update.message.reply_text(
-            "🔒 <b>Welcome to Job Alert Bot!</b>\n\n"
-            "To use this bot, please join our channels first:\n\n"
-            "After joining, click the button below to verify.",
-            parse_mode='HTML',
-            reply_markup=keyboards.get_channels_keyboard(config.REQUIRED_CHANNELS)
-        )
-        return
-    
-    # Start onboarding for new user
+    # Channel verified - Start onboarding for new user
     await update.message.reply_text(
         f"👋 Welcome {user.first_name}!\n\n"
         f"Let's get you set up to receive personalized job notifications.\n\n"
@@ -80,15 +81,21 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_member = await check_channel_membership(update, context)
         if is_member:
             await query.edit_message_text(
-                "✅ Great! You've joined the channels.\n\n"
-                "Now let's set up your preferences.\n\n"
+                "✅ <b>Perfect! You've joined all required channels.</b>\n\n"
+                "Now let's set up your job preferences.\n\n"
                 "What are you looking for?",
+                parse_mode='HTML',
                 reply_markup=keyboards.get_job_type_keyboard()
             )
         else:
             await query.edit_message_text(
-                "❌ You haven't joined all channels yet.\n\n"
-                "Please join all channels and try again.",
+                "❌ <b>Channel Verification Failed</b>\n\n"
+                "Please make sure you:\n"
+                "1. Clicked on each channel link above\n"
+                "2. Joined the channel(s)\n"
+                "3. Then click '✅ I've Joined' button again\n\n"
+                "<i>Note: You must join ALL channels to continue.</i>",
+                parse_mode='HTML',
                 reply_markup=keyboards.get_channels_keyboard(config.REQUIRED_CHANNELS)
             )
         return
