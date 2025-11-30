@@ -226,23 +226,26 @@ async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Error listing users: {str(e)}")
 
 async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Broadcast message to all users"""
+    """Broadcast message to all users - waits for admin's next message"""
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Admin access required!")
         return
     
-    # Check if message provided
-    if not context.args:
-        await update.message.reply_text(
-            "📢 <b>Broadcast Message</b>\n\n"
-            "Usage: /broadcast <message>\n\n"
-            "Example:\n"
-            "/broadcast Hello everyone! New jobs available.",
-            parse_mode='HTML'
-        )
-        return
+    # Set waiting state for broadcast
+    from cache import cache
+    cache.set_user_state(update.effective_user.id, {'waiting_for': 'broadcast'}, ttl=300)
     
-    message = " ".join(context.args)
+    await update.message.reply_text(
+        "📢 <b>Broadcast Mode Activated</b>\n\n"
+        "Send your message now (text, photo, video, etc.)\n"
+        "It will be broadcasted to all active users.\n\n"
+        "<i>You have 5 minutes. Send /cancel to abort.</i>",
+        parse_mode='HTML'
+    )
+    return
+
+async def process_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE, message_to_broadcast):
+    """Process and send the broadcast message"""
     
     try:
         active_users = database.get_all_active_users()
@@ -258,16 +261,43 @@ async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = 0
         failed = 0
         
-        for user_id in active_users:
+        # Broadcast the actual message content
+        for target_user_id in active_users:
             try:
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=f"📢 <b>Admin Message:</b>\n\n{message}",
-                    parse_mode='HTML'
-                )
+                # Copy the message to each user with admin header
+                header = "📢 <b>Message from Admin:</b>\n\n"
+                
+                if message_to_broadcast.text:
+                    await context.bot.send_message(
+                        chat_id=target_user_id,
+                        text=header + message_to_broadcast.text,
+                        parse_mode='HTML'
+                    )
+                elif message_to_broadcast.photo:
+                    await context.bot.send_photo(
+                        chat_id=target_user_id,
+                        photo=message_to_broadcast.photo[-1].file_id,
+                        caption=header + (message_to_broadcast.caption or ""),
+                        parse_mode='HTML'
+                    )
+                elif message_to_broadcast.video:
+                    await context.bot.send_video(
+                        chat_id=target_user_id,
+                        video=message_to_broadcast.video.file_id,
+                        caption=header + (message_to_broadcast.caption or ""),
+                        parse_mode='HTML'
+                    )
+                elif message_to_broadcast.document:
+                    await context.bot.send_document(
+                        chat_id=target_user_id,
+                        document=message_to_broadcast.document.file_id,
+                        caption=header + (message_to_broadcast.caption or ""),
+                        parse_mode='HTML'
+                    )
+                
                 success += 1
             except Exception as e:
-                logger.error(f"Broadcast failed for user {user_id}: {e}")
+                logger.error(f"Broadcast failed for user {target_user_id}: {e}")
                 failed += 1
         
         await status_msg.edit_text(

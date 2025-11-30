@@ -258,11 +258,10 @@ def get_matching_jobs(user_id, limit=4):
         try:
             cursor = connection.cursor(dictionary=True)
             
-            # Optimized query using composite index
+            # Optimized query with indexes
             cursor.execute("""
                 SELECT DISTINCT j.* 
                 FROM jobs j
-                FORCE INDEX (idx_composite)
                 INNER JOIN user_domains ud ON j.domain = ud.domain
                 INNER JOIN users u ON ud.user_id = u.user_id
                 LEFT JOIN sent_notifications sn ON j.id = sn.job_id AND sn.user_id = u.user_id

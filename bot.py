@@ -243,6 +243,22 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
     
+    # Check if admin is in broadcast mode
+    if user_id == config.ADMIN_ID:
+        state = cache.get_user_state(user_id)
+        if state and state.get('waiting_for') == 'broadcast':
+            # Cancel command
+            if text == "/cancel":
+                cache.clear_user_state(user_id)
+                await update.message.reply_text("❌ Broadcast cancelled.")
+                return
+            
+            # Process broadcast
+            from admin_commands import process_broadcast_message
+            cache.clear_user_state(user_id)
+            await process_broadcast_message(update, context, update.message)
+            return
+    
     if text == "🔍 View Jobs":
         await show_jobs_to_user(update, context)
     
