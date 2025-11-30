@@ -361,36 +361,34 @@ async def show_user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     try:
-        connection = database.get_connection()
-        if not connection:
-            await update.message.reply_text("❌ Database error!")
-            return
-        
-        cursor = connection.cursor(dictionary=True)
-        
-        # Get user info
-        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-        user = cursor.fetchone()
-        
-        if not user:
-            await update.message.reply_text("Please complete setup first using /start")
+        with database.get_connection() as connection:
+            if not connection:
+                await update.message.reply_text("❌ Database error!")
+                return
+            
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get user info
+            cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+            user = cursor.fetchone()
+            
+            if not user:
+                await update.message.reply_text("Please complete setup first using /start")
+                cursor.close()
+                return
+            
+            # Get domains
+            cursor.execute("SELECT domain FROM user_domains WHERE user_id = %s", (user_id,))
+            domains = [d['domain'] for d in cursor.fetchall()]
+            
+            # Get notification count
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM sent_notifications WHERE user_id = %s",
+                (user_id,)
+            )
+            notif_count = cursor.fetchone()['count']
+            
             cursor.close()
-            connection.close()
-            return
-        
-        # Get domains
-        cursor.execute("SELECT domain FROM user_domains WHERE user_id = %s", (user_id,))
-        domains = [d['domain'] for d in cursor.fetchall()]
-        
-        # Get notification count
-        cursor.execute(
-            "SELECT COUNT(*) as count FROM sent_notifications WHERE user_id = %s",
-            (user_id,)
-        )
-        notif_count = cursor.fetchone()['count']
-        
-        cursor.close()
-        connection.close()
         
         days_active = (datetime.now() - user['created_at']).days
         

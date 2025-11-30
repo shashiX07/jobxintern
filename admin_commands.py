@@ -95,51 +95,50 @@ async def bot_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        connection = database.get_connection()
-        if not connection:
-            await update.message.reply_text("❌ Database connection failed!")
-            return
-        
-        cursor = connection.cursor(dictionary=True)
-        
-        # Get user count
-        cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE")
-        active_users = cursor.fetchone()['count']
-        
-        cursor.execute("SELECT COUNT(*) as count FROM users")
-        total_users = cursor.fetchone()['count']
-        
-        # Get job count
-        cursor.execute("SELECT COUNT(*) as count FROM jobs")
-        total_jobs = cursor.fetchone()['count']
-        
-        cursor.execute("SELECT COUNT(*) as count FROM jobs WHERE scraped_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)")
-        recent_jobs = cursor.fetchone()['count']
-        
-        # Get notification count
-        cursor.execute("SELECT COUNT(*) as count FROM sent_notifications")
-        total_notifications = cursor.fetchone()['count']
-        
-        # Get jobs by source
-        cursor.execute("""
-            SELECT source, COUNT(*) as count 
-            FROM jobs 
-            GROUP BY source
-        """)
-        sources = cursor.fetchall()
-        
-        # Get top domains
-        cursor.execute("""
-            SELECT domain, COUNT(*) as count 
-            FROM user_domains 
-            GROUP BY domain 
-            ORDER BY count DESC 
-            LIMIT 5
-        """)
-        top_domains = cursor.fetchall()
-        
-        cursor.close()
-        connection.close()
+        with database.get_connection() as connection:
+            if not connection:
+                await update.message.reply_text("❌ Database connection failed!")
+                return
+            
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get user count
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE")
+            active_users = cursor.fetchone()['count']
+            
+            cursor.execute("SELECT COUNT(*) as count FROM users")
+            total_users = cursor.fetchone()['count']
+            
+            # Get job count
+            cursor.execute("SELECT COUNT(*) as count FROM jobs")
+            total_jobs = cursor.fetchone()['count']
+            
+            cursor.execute("SELECT COUNT(*) as count FROM jobs WHERE scraped_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)")
+            recent_jobs = cursor.fetchone()['count']
+            
+            # Get notification count
+            cursor.execute("SELECT COUNT(*) as count FROM sent_notifications")
+            total_notifications = cursor.fetchone()['count']
+            
+            # Get jobs by source
+            cursor.execute("""
+                SELECT source, COUNT(*) as count 
+                FROM jobs 
+                GROUP BY source
+            """)
+            sources = cursor.fetchall()
+            
+            # Get top domains
+            cursor.execute("""
+                SELECT domain, COUNT(*) as count 
+                FROM user_domains 
+                GROUP BY domain 
+                ORDER BY count DESC 
+                LIMIT 5
+            """)
+            top_domains = cursor.fetchall()
+            
+            cursor.close()
         
         # Format message
         source_text = "\n".join([f"   • {s['source']}: {s['count']}" for s in sources]) if sources else "   None"
@@ -172,27 +171,26 @@ async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        connection = database.get_connection()
-        if not connection:
-            await update.message.reply_text("❌ Database connection failed!")
-            return
-        
-        cursor = connection.cursor(dictionary=True)
-        
-        cursor.execute("""
-            SELECT u.user_id, u.username, u.first_name, u.job_type, 
-                   u.work_mode, u.is_active, u.created_at,
-                   GROUP_CONCAT(ud.domain) as domains
-            FROM users u
-            LEFT JOIN user_domains ud ON u.user_id = ud.user_id
-            GROUP BY u.user_id
-            ORDER BY u.created_at DESC
-            LIMIT 20
-        """)
-        
-        users = cursor.fetchall()
-        cursor.close()
-        connection.close()
+        with database.get_connection() as connection:
+            if not connection:
+                await update.message.reply_text("❌ Database connection failed!")
+                return
+            
+            cursor = connection.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT u.user_id, u.username, u.first_name, u.job_type, 
+                       u.work_mode, u.is_active, u.created_at,
+                       GROUP_CONCAT(ud.domain) as domains
+                FROM users u
+                LEFT JOIN user_domains ud ON u.user_id = ud.user_id
+                GROUP BY u.user_id
+                ORDER BY u.created_at DESC
+                LIMIT 20
+            """)
+            
+            users = cursor.fetchall()
+            cursor.close()
         
         if not users:
             await update.message.reply_text("📭 No users registered yet.")
@@ -290,24 +288,23 @@ async def clear_old_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        connection = database.get_connection()
-        if not connection:
-            await update.message.reply_text("❌ Database connection failed!")
-            return
-        
-        cursor = connection.cursor()
-        
-        # Delete old jobs
-        cursor.execute("""
-            DELETE FROM jobs 
-            WHERE scraped_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
-        """)
-        
-        deleted = cursor.rowcount
-        connection.commit()
-        
-        cursor.close()
-        connection.close()
+        with database.get_connection() as connection:
+            if not connection:
+                await update.message.reply_text("❌ Database connection failed!")
+                return
+            
+            cursor = connection.cursor()
+            
+            # Delete old jobs
+            cursor.execute("""
+                DELETE FROM jobs 
+                WHERE scraped_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+            """)
+            
+            deleted = cursor.rowcount
+            connection.commit()
+            
+            cursor.close()
         
         await update.message.reply_text(
             f"🗑️ <b>Cleanup Complete!</b>\n\n"
