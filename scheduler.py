@@ -21,9 +21,10 @@ class JobScheduler:
         # Create background tasks
         scraping_task = asyncio.create_task(self._scraping_loop())
         notification_task = asyncio.create_task(self._notification_loop())
+        cleanup_task = asyncio.create_task(self._cleanup_loop())
         
-        self.tasks = [scraping_task, notification_task]
-        logger.info("Scheduler started successfully")
+        self.tasks = [scraping_task, notification_task, cleanup_task]
+        logger.info("Scheduler started successfully with all optimization tasks")
     
     async def _scraping_loop(self):
         """Background loop for periodic scraping"""
@@ -58,7 +59,7 @@ class JobScheduler:
             await asyncio.sleep(30)
     
     async def scrape_all_jobs(self):
-        """Scrape jobs for all unique preference combinations"""
+        """Scrape jobs for all unique preference combinations with resource management"""
         if self.is_scraping:
             logger.info("Scraping already in progress, skipping...")
             return
@@ -67,25 +68,25 @@ class JobScheduler:
         logger.info("Starting job scraping...")
         
         try:
-            connection = database.get_connection()
-            if not connection:
-                logger.error("Failed to connect to database for scraping")
-                return
-            
-            cursor = connection.cursor(dictionary=True)
-            
-            # Get all unique preference combinations
-            cursor.execute("""
-                SELECT DISTINCT u.job_type, u.work_mode, GROUP_CONCAT(ud.domain) as domains
-                FROM users u
-                INNER JOIN user_domains ud ON u.user_id = ud.user_id
-                WHERE u.is_active = TRUE
-                GROUP BY u.job_type, u.work_mode
-            """)
-            
-            combinations = cursor.fetchall()
-            cursor.close()
-            connection.close()
+            with database.get_connection() as connection:
+                if not connection:
+                    logger.error("Failed to connect to database for scraping")
+                    self.is_scraping = False
+                    return
+                
+                cursor = connection.cursor(dictionary=True)
+                
+                # Get all unique preference combinations
+                cursor.execute("""
+                    SELECT DISTINCT u.job_type, u.work_mode, GROUP_CONCAT(ud.domain) as domains
+                    FROM users u
+                    INNER JOIN user_domains ud ON u.user_id = ud.user_id
+                    WHERE u.is_active = TRUE
+                    GROUP BY u.job_type, u.work_mode
+                """)
+                
+                combinations = cursor.fetchall()
+                cursor.close()
             
             if not combinations:
                 logger.info("No active users found. Scraping skipped. Add users via /start on Telegram.")
@@ -122,56 +123,104 @@ class JobScheduler:
             self.is_scraping = False
     
     async def send_notifications(self):
-        """Send job notifications to all active users"""
+        """Send job notifications to all active users with batch optimization"""
         logger.info("Starting notification send...")
         
         try:
             active_users = database.get_all_active_users()
             
-            sent_count = 0
+            if not active_users:
+                logger.info("No active users for notifications")
+                return
             
-            for user_id in active_users:
-                try:
-                    # Get matching jobs
-                    jobs = database.get_matching_jobs(user_id, limit=3)
-                    
-                    if not jobs:
-                        continue
-                    
-                    # Send notification message
-                    await self.bot.send_message(
-                        chat_id=user_id,
-                        text=f"🔔 <b>New Job Alert!</b>\n\n"
-                             f"Found {len(jobs)} new opportunities for you:\n",
-                        parse_mode='HTML'
-                    )
-                    
-                    # Send each job
-                    for job in jobs:
-                        message = format_job_message(job)
+            sent_count = 0
+            failed_count = 0
+            batch_notifications = []  # For batch marking
+            
+            # Process in batches of 10 users to manage resources
+            batch_size = 10
+            for i in range(0, len(active_users), batch_size):
+                batch = active_users[i:i + batch_size]
+                
+                for user_id in batch:
+                    try:
+                        # Get matching jobs
+                        jobs = database.get_matching_jobs(user_id, limit=3)
                         
+                        if not jobs:
+                            continue
+                        
+                        # Send notification message
                         await self.bot.send_message(
                             chat_id=user_id,
-                            text=message,
-                            reply_markup=keyboards.get_job_actions_keyboard(job['url']),
+                            text=f"🔔 <b>New Job Alert!</b>\n\n"
+                                 f"Found {len(jobs)} new opportunities for you:\n",
                             parse_mode='HTML'
                         )
                         
-                        # Mark as sent
-                        database.mark_notification_sent(user_id, job['id'])
-                        sent_count += 1
+                        # Send each job
+                        for job in jobs:
+                            try:
+                                message = format_job_message(job)
+                                
+                                await self.bot.send_message(
+                                    chat_id=user_id,
+                                    text=message,
+                                    reply_markup=keyboards.get_job_actions_keyboard(job['url']),
+                                    parse_mode='HTML',
+                                    disable_web_page_preview=True
+                                )
+                                
+                                # Add to batch for marking
+                                batch_notifications.append((user_id, job['id']))
+                                sent_count += 1
+                                
+                                # Small delay to avoid rate limits
+                                await asyncio.sleep(0.3)
+                                
+                            except Exception as e:
+                                logger.error(f"Error sending job {job['id']} to {user_id}: {e}")
+                                failed_count += 1
+                                continue
                         
-                        # Small delay between messages
-                        await asyncio.sleep(0.5)
-                    
-                except Exception as e:
-                    logger.error(f"Error sending notification to {user_id}: {e}")
-                    continue
+                    except Exception as e:
+                        logger.error(f"Error processing notifications for {user_id}: {e}")
+                        failed_count += 1
+                        continue
+                
+                # Batch mark notifications after each batch of users
+                if batch_notifications:
+                    database.mark_notifications_batch(batch_notifications)
+                    batch_notifications = []
+                
+                # Delay between batches
+                if i + batch_size < len(active_users):
+                    await asyncio.sleep(2)
             
-            logger.info(f"Notifications sent: {sent_count} jobs to {len(active_users)} users")
+            logger.info(f"Notifications completed: {sent_count} jobs sent, {failed_count} failed, {len(active_users)} users processed")
             
         except Exception as e:
             logger.error(f"Error in send_notifications: {e}")
+    
+    async def _cleanup_loop(self):
+        """Background loop for database cleanup (runs daily at 3 AM)"""
+        while self.running:
+            now = datetime.now()
+            
+            # Run cleanup at 3 AM
+            if now.hour == 3 and now.minute == 0:
+                logger.info("Starting automated database cleanup...")
+                try:
+                    deleted = database.cleanup_old_data(days=30)
+                    logger.info(f"Cleanup completed: {deleted} records removed")
+                except Exception as e:
+                    logger.error(f"Cleanup error: {e}")
+                
+                # Sleep for 2 minutes to avoid re-running
+                await asyncio.sleep(120)
+            
+            # Check every 5 minutes
+            await asyncio.sleep(300)
     
     def stop(self):
         """Stop the scheduler"""
