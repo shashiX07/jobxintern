@@ -16,18 +16,28 @@ async def check_channel_membership(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     
     if not config.REQUIRED_CHANNELS:
+        logger.warning("No REQUIRED_CHANNELS configured - allowing access")
         return True
     
     for channel_id in config.REQUIRED_CHANNELS:
         try:
             member = await context.bot.get_chat_member(channel_id, user_id)
-            if member.status not in ['member', 'administrator', 'creator', 'restricted']:
+            logger.info(f"User {user_id} status in channel {channel_id}: {member.status}")
+            
+            # Check if user is a member (including all valid statuses)
+            if member.status in ['left', 'kicked']:
+                logger.info(f"User {user_id} not in channel {channel_id} - status: {member.status}")
                 return False
+                
         except TelegramError as e:
             logger.error(f"Error checking membership for channel {channel_id}: {e}")
-            # If we can't check (maybe bot not admin), assume they need to join
+            logger.error(f"Make sure the bot is added as ADMIN in channel {channel_id}")
+            # Return False only if it's a permission error
+            if "not enough rights" in str(e).lower() or "chat not found" in str(e).lower():
+                logger.error(f"Bot doesn't have admin rights in channel {channel_id}!")
             return False
     
+    logger.info(f"User {user_id} verified in all channels")
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,13 +159,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if success:
                 cache.clear_user_state(user_id)
                 await query.edit_message_text(
-                    f"🎉 Setup complete!\n\n"
-                    f"📋 Your Preferences:\n"
+                    f"🎉 <b>Setup Complete!</b>\n\n"
+                    f"📋 <b>Your Preferences:</b>\n"
                     f"• Type: {state['job_type']}\n"
                     f"• Mode: {state['work_mode']}\n"
                     f"• Domains: {', '.join(domains)}\n\n"
                     f"You'll receive job notifications <b>4 times daily</b> at {', '.join(config.NOTIFICATION_TIMES)}.\n\n"
                     f"Jobs are updated every <b>6 hours</b>. Use the menu to view jobs anytime!",
+                    parse_mode='HTML',
                     reply_markup=None
                 )
                 
