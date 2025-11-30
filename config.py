@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 REQUIRED_CHANNELS = [int(ch) for ch in os.getenv('REQUIRED_CHANNELS', '').split(',') if ch.strip()]
+CHANNEL_URLS = [url.strip() for url in os.getenv('CHANNEL_URLS', '').split(',') if url.strip()]
 
 # Log configuration on startup
 logger.info(f"Config loaded - ADMIN_ID: {ADMIN_ID}, BOT_TOKEN: {'Set' if BOT_TOKEN else 'Missing'}")

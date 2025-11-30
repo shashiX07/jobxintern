@@ -70,15 +70,26 @@ def get_account_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_channels_keyboard(channels):
-    """Check channels keyboard"""
+    """Check channels keyboard with friendly names"""
+    import config
     keyboard = []
-    for channel_id in channels:
-        # In real use, you'd want to store channel usernames/links
+    
+    # Use URLs from config if available, otherwise generate generic ones
+    for idx, channel_id in enumerate(channels, 1):
+        # Check if custom URL is provided
+        if config.CHANNEL_URLS and idx <= len(config.CHANNEL_URLS):
+            channel_link = config.CHANNEL_URLS[idx - 1]
+        else:
+            # Generate a generic Telegram link
+            # For private channels, this won't work, but it's better than nothing
+            channel_link = f"https://t.me/joinchat/placeholder"
+        
         keyboard.append([InlineKeyboardButton(
-            f"Join Channel {channel_id}",
-            url=f"https://t.me/your_channel"  # Replace with actual channel links
+            f"📢 Join Channel {idx}",
+            url=channel_link
         )])
-    keyboard.append([InlineKeyboardButton("✅ I've Joined", callback_data="check_membership")])
+    
+    keyboard.append([InlineKeyboardButton("✅ I've Joined All Channels", callback_data="check_membership")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_yes_no_keyboard(yes_callback, no_callback):

@@ -21,10 +21,11 @@ async def check_channel_membership(update: Update, context: ContextTypes.DEFAULT
     for channel_id in config.REQUIRED_CHANNELS:
         try:
             member = await context.bot.get_chat_member(channel_id, user_id)
-            if member.status not in ['member', 'administrator', 'creator']:
+            if member.status not in ['member', 'administrator', 'creator', 'restricted']:
                 return False
-        except TelegramError:
-            logger.error(f"Error checking membership for channel {channel_id}")
+        except TelegramError as e:
+            logger.error(f"Error checking membership for channel {channel_id}: {e}")
+            # If we can't check (maybe bot not admin), assume they need to join
             return False
     
     return True
@@ -33,34 +34,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command - check channels and begin onboarding"""
     user = update.effective_user
     
-    # Check channel membership
-    is_member = await check_channel_membership(update, context)
-    
-    if not is_member:
-        await update.message.reply_text(
-            "🔒 To use this bot, please join our channels first:\n\n"
-            "After joining, click the button below to verify.",
-            reply_markup=keyboards.get_channels_keyboard(config.REQUIRED_CHANNELS)
-        )
-        return
-    
-    # Check if user exists
+    # Check if user exists first
     user_data = database.get_user(user.id)
     
     if user_data:
+        # Existing user - welcome back
         await update.message.reply_text(
             f"👋 Welcome back, {user.first_name}!\n\n"
             f"You're all set up. Use the menu below to explore jobs.",
             reply_markup=keyboards.get_main_menu_keyboard()
         )
-    else:
-        # Start onboarding
+        return
+    
+    # New user - check channel membership
+    is_member = await check_channel_membership(update, context)
+    
+    if not is_member and config.REQUIRED_CHANNELS:
         await update.message.reply_text(
-            f"👋 Welcome {user.first_name}!\n\n"
-            f"Let's get you set up to receive personalized job notifications.\n\n"
-            f"First, what are you looking for?",
-            reply_markup=keyboards.get_job_type_keyboard()
+            "🔒 <b>Welcome to Job Alert Bot!</b>\n\n"
+            "To use this bot, please join our channels first:\n\n"
+            "After joining, click the button below to verify.",
+            parse_mode='HTML',
+            reply_markup=keyboards.get_channels_keyboard(config.REQUIRED_CHANNELS)
         )
+        return
+    
+    # Start onboarding for new user
+    await update.message.reply_text(
+        f"👋 Welcome {user.first_name}!\n\n"
+        f"Let's get you set up to receive personalized job notifications.\n\n"
+        f"First, what are you looking for?",
+        reply_markup=keyboards.get_job_type_keyboard()
+    )
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all callback queries"""
